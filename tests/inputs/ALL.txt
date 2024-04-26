@@ -11,9 +11,9 @@ Hello
 COUNT
 WRITEF
 first.txt
-2
 hello world
-welcome 
+welcome
+EOF  
 READF
 first.txt
 END
