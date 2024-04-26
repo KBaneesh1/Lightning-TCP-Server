@@ -45,11 +45,16 @@ class Database {
     string remove(string key) {
         // cout<<key<<endl;
         pthread_mutex_lock(&dbMutex);
+        if(db.find(key) != db.end()) {
         cout<<db[key]<<endl;
         bool done = db.erase(key);
         pthread_mutex_unlock(&dbMutex);
-        if (done) return "FIN";
+        return "FIN";
+      }
+   
+        pthread_mutex_unlock(&dbMutex);
         return "NULL";
+    
     }
 };
 
@@ -163,7 +168,7 @@ void* HandleClient(void* arg) {
                 string success = "File uploaded successfully\n";
                 send(clientSocket, success.c_str(), success.size(), 0);
             }
-            
+
         }
         if(msg[i]=="READF"){
             // cout<<"he"<<endl;
