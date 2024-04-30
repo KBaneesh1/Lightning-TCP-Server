@@ -27,7 +27,7 @@ class Database {
     public:
     string write(string key, string value) {
         pthread_mutex_lock(&dbMutex);
-        db[key] = value.substr(1);
+        db[key] = value;
         pthread_mutex_unlock(&dbMutex);
         return "FIN";
     }
@@ -103,96 +103,121 @@ int AcceptConnection(int serverSocket) {
 }
 
 void* HandleClient(void* arg) {
+
     int clientSocket = *((int*)arg);
     char buffer[1024];
     ssize_t bytesReceived;
 
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-    if (bytesReceived == -1) {
-        // perror("recv");
-        close(clientSocket);
-        return NULL;
-    }
+    while(1){
+        bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+        if (bytesReceived == -1) {
+            close(clientSocket);
+            return NULL;
+        }
 
-    string temp = "";
-    vector<string> msg;
-    for (int i = 0; i < bytesReceived; i++) {
-        if (buffer[i] != '\n') temp += buffer[i];
-        else {
-            msg.push_back(temp);
-            temp = "";
-        }
-    }
-
-    int i = 0;
-    int len = msg.size();
-    while (i < len) {
-        if (msg[i] == "COUNT") {
-            string count = to_string(db.count()) + "\n";
-            send(clientSocket, count.c_str(), count.size(), 0);
-        }
-        if (msg[i] == "READ") {
-            string key = (i + 1 < len) ? msg[++i] : "NULL";
-            string value = db.read(key) + "\n";
-            send(clientSocket, value.c_str(), value.size(), 0);
-        }
-        if (msg[i] == "WRITE") {
-            string key = (i + 1 < len) ? msg[++i] : "NULL";
-            string value = (i + 1 < len) ? msg[++i] : "NULL";
-            string result = db.write(key, value) + "\n";
-            send(clientSocket, result.c_str(), result.size(), 0);
-        }
-        if (msg[i] == "DELETE") {
-            string key = (i + 1 < len) ? msg[++i] : "NULL";
-            string result = db.remove(key) + "\n";
-            send(clientSocket, result.c_str(), result.size(), 0);
-        }
-        if(msg[i]=="WRITEF"){
-            //handle file upload
-            string filename=(i+1<len)?msg[++i]:"NULL";
-            int lines=(i+1<len)?atoi(msg[++i].c_str()):0;
-            // cout<<lines<<endl;
-            FILE *file=fopen(filename.c_str(),"wb");
-            if(!file){
-                string err="Cannot open file\n";
-                send(clientSocket,err.c_str(),err.size(),0);
+        string temp = "";
+        vector<string> msg;
+        for (int i = 0; i < bytesReceived; i++) {
+            cout<<temp<<endl;
+            if (buffer[i] != '\n') temp += buffer[i];
+            else {
+                msg.push_back(temp);
+                temp = "";
             }
-            else{
-                while(lines>0 and i+1<len){
-                    fwrite(msg[i+1].c_str(), 1, msg[i+1].size(), file);
-                    fwrite("\n", 1, 1, file);
-                    i++;  
-                    lines--; 
+        }
+
+        int i = 0;
+        int len = msg.size();
+        // cout<<len<<endl;
+        while (i < len) {
+            if(msg[i]=="HELLO"){
+                // cout<<"here"<<endl;
+                string response="Hello from server";
+                send(clientSocket,response.c_str(),response.size(),0);
+            }
+            if (msg[i] == "COUNT") {
+                string count = to_string(db.count()) + "\n";
+                send(clientSocket, count.c_str(), count.size(), 0);
+            }
+            if (msg[i] == "READ") {
+                string key = (i + 1 < len) ? msg[++i] : "NULL";
+                cout<<key<<endl;
+                string value = db.read(key) + "\n";
+                cout<<value<<endl;
+                send(clientSocket, value.c_str(), value.size(), 0);
+            }
+            if (msg[i] == "WRITE") {
+                string key = (i + 1 < len) ? msg[++i] : "NULL";
+                string value = (i + 1 < len) ? msg[++i] : "NULL";
+                string result = db.write(key, value) + "\n";
+                send(clientSocket, result.c_str(), result.size(), 0);
+            }
+            if (msg[i] == "DELETE") {
+                string key = (i + 1 < len) ? msg[++i] : "NULL";
+                string result = db.remove(key) + "\n";
+                send(clientSocket, result.c_str(), result.size(), 0);
+            }
+            if(msg[i]=="UPLOADF"){
+                //handle file upload
+                string filename=(i+1<len)?msg[++i]:"NULL";
+                // cout<<lines<<endl;
+                FILE *file=fopen(filename.c_str(),"wb");
+                if(!file){
+                    string err="Cannot open file\n";
+                    send(clientSocket,err.c_str(),err.size(),0);
                 }
-                fclose(file);
-                string success = "File uploaded successfully\n";
-                send(clientSocket, success.c_str(), success.size(), 0);
+                else{
+                    char buffer[1024];
+                    int bytesReceived;
+                    cout<<"here"<<endl;
+                    while ((bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0)) > 0) {
+                        cout<<"ere"<<endl;
+                        fwrite(buffer, 1, bytesReceived, file);
+                    }
+                    fclose(file);
+
+                    string success = "File uploaded successfully\n";
+                    send(clientSocket, success.c_str(), success.size(), 0);
+                }
+
+            }
+            if(msg[i]=="DOWNLOADF") {
+                string filename = (i + 1 < len) ? msg[++i] : "NULL";
+                FILE *file = fopen(filename.c_str(), "r");
+                if(!file){
+                    string err = "no file with that name exists\n";
+                    send(clientSocket, err.c_str(), err.size(), 0);
+                } 
+                else{
+                    char buffer[1024];
+                    size_t bytesRead;
+                    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+                        send(clientSocket, buffer, bytesRead, 0);
+                    }
+                    fclose(file);
+                }
             }
 
-        }
-        if(msg[i]=="READF"){
-            // cout<<"he"<<endl;
-            string filename=(i+1<len)?msg[++i]:"NULL";
-            FILE *file=fopen(filename.c_str(),"r");
-            if(!file){
-                string err="no file with that name exists\n";
-                send(clientSocket,err.c_str(),err.size(),0);
-            }
-            else{
-                char result[1024];
-                while(fgets(result,1024,file)!=NULL)
-                    send(clientSocket,result,strlen(result),0);
-                fclose(file);
-            }
-        }
-        if (msg[i] == "END") break;
+            // if(msg[i]=="EDITF"){
+            //     string filename=(i+1<len)?msg[++i]:"NULL";
+            //     FILE *file=fopen(filename.c_str(),"r");
+            //     if(!file){
+            //         string err="no file with that name exists\n";
+            //         send(clientSocket,err.c_str(),err.size(),0);
+            //     }
+            //     else{
 
-        i++;
+            //     }
+            // }
+            if (msg[i] == "END") break;
+
+            i++;
+        }
+        string result = "\n";
+        cout<<result<<endl;
+        send(clientSocket, result.c_str(), result.size(), 0);
     }
-    string result = "\n";
-    send(clientSocket, result.c_str(), result.size(), 0);
-    close(clientSocket); // Close client socket
-    return NULL;
+    close(clientSocket);
 }
 
 void* HandleQueue(void* arg) {
