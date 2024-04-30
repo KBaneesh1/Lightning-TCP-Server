@@ -9,6 +9,7 @@
 #include <queue>
 #include <unordered_map>
 #include <unistd.h>
+#include<list>
 
 //FINAL
 using namespace std;
@@ -16,6 +17,8 @@ using namespace std;
 pthread_mutex_t dbMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t cacheMutex;
+
 
 const int threadCount = 10;
 queue<int> clients;
@@ -60,6 +63,83 @@ class Database {
 
 Database db;
 
+
+
+class LRUCache {
+    private:
+        unordered_map<string, pair<string, list<string>::iterator>> cache;
+        list<string> lruList;
+        size_t capacity;
+
+    public:
+        LRUCache(size_t cap) : capacity(cap) {}
+
+        string read(string key) {
+            if (cache.find(key) == cache.end()) {
+                return "NULL"; // Not found
+            }
+            // Move accessed key to the front of the list (most recently used)
+            lruList.splice(lruList.begin(), lruList, cache[key].second);
+            return cache[key].first;
+        }
+
+        string write(const string& key, const string& value) {
+            if (cache.find(key) != cache.end()) {
+                // If key exists, update the value and move it to the front
+                pthread_mutex_lock(&cacheMutex);
+                cache[key].first = value;
+                lruList.splice(lruList.begin(), lruList, cache[key].second);
+                pthread_mutex_unlock(&cacheMutex);
+                string result = db.write(key, value) + "\n";
+                return result;
+            }
+
+            // If cache is full, remove the least recently used item
+            if (cache.size() >= capacity) {
+                string lruKey = lruList.back();
+                lruList.pop_back();
+                cache.erase(lruKey);
+            }
+
+            // Add the new key-value pair to the cache
+            lruList.push_front(key);
+            pthread_mutex_lock(&cacheMutex);
+            cache[key] = {value, lruList.begin()};
+            pthread_mutex_unlock(&cacheMutex);
+            string result = db.write(key, value) + "\n";
+
+            return result;
+        }
+
+        // Display the contents of the cache
+        void display() {
+            cout << "Cache Contents:" << endl;
+            for (const auto& entry : cache) {
+                cout << entry.first << ": " << entry.second.first << endl;
+            }
+            cout << endl;
+    }
+};
+
+// define a cache_size constant later
+LRUCache db_cache(3);
+
+string handleRead(string key) {
+    string value = db_cache.read(key);
+    string nul = "NULL";
+    if(value.compare("NULL")==0) {
+        return value + "\n";
+    }
+    return db.read(key) + "\n";
+}
+
+string handleWrite(string key, string value) {
+    // all writes happen through the cache only
+    // cache kind of writes back to the database
+    string result = db_cache.write(key, value);
+    return result + "\n";
+}
+
 int CreateSocket(int portno) {
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
     int iSetOption = 1;
@@ -102,6 +182,9 @@ int AcceptConnection(int serverSocket) {
     return clientSocket;
 }
 
+
+
+
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
     char buffer[1024];
@@ -133,13 +216,13 @@ void* HandleClient(void* arg) {
         }
         if (msg[i] == "READ") {
             string key = (i + 1 < len) ? msg[++i] : "NULL";
-            string value = db.read(key) + "\n";
+            string value = handleRead(key);
             send(clientSocket, value.c_str(), value.size(), 0);
         }
         if (msg[i] == "WRITE") {
             string key = (i + 1 < len) ? msg[++i] : "NULL";
             string value = (i + 1 < len) ? msg[++i] : "NULL";
-            string result = db.write(key, value) + "\n";
+            string result = handleWrite(key, value);
             send(clientSocket, result.c_str(), result.size(), 0);
         }
         if (msg[i] == "DELETE") {
@@ -253,3 +336,29 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+/*
+// using cache part
+int main() {
+    // Create a cache with a capacity of 3
+    LRUCache cache(3);
+
+    // Add some entries to the cache
+    cache.put("key1", "value1");
+    cache.put("key2", "value2");
+    cache.put("key3", "value3");
+    cache.display();
+
+    // Access a value
+    cout << "Value of key2: " << cache.get("key2") << endl;
+
+    // Add another entry, causing eviction of least recently used (key1)
+    cache.put("key4", "value4");
+    cache.display();
+
+    // Access a non-existent key
+    cout << "Value of key1: " << cache.get("key1") << endl; // Should print an empty string
+
+    return 0;
+}
+*/
