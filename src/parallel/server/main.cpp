@@ -183,6 +183,19 @@ void* HandleClient(void* arg) {
                 send(clientSocket, fileContents.c_str(), fileContents.size(), 0);
 
             }
+            else if(msg[i]=="UPDATE_FILE"){
+                string filename="./server/text_files/";
+                filename+=(i+1)<len?(filename+msg[++i]):"NULL";
+                ofstream file(filename);
+                if (!file.is_open()) {
+                    send(clientSocket, "ERROR", 5, 0);
+                } else {
+                    string content = (i+1)<len?msg[++i]:"";
+                    file << content;
+                    file.close();
+                    send(clientSocket, "SUCCESS", 7, 0);
+                }
+            }
             if (msg[i] == "END") break;
 
             i++;

@@ -73,9 +73,22 @@ MainWindow::MainWindow() : clientSocket(-1)
 
     // Connect signals
     fileTreeView.signal_cursor_changed().connect(sigc::mem_fun(*this, &MainWindow::onFileSelectionChanged));
-
+    textBuffer->signal_changed().connect(sigc::mem_fun(*this, &MainWindow::onTextChanged));
     // Connect to server
     connectToServer();
+}
+
+void MainWindow::onTextChanged()
+{
+    // Get the currently selected file from the file tree view
+    Gtk::TreeModel::iterator iter = fileTreeView.get_selection()->get_selected();
+    if (iter)
+    {
+        Gtk::TreeModel::Row row = *iter;
+        std::string filename = row[columns.filename];
+        std::string filePath = filename;
+        saveAndSendFile(filePath);
+    }
 }
 
 void MainWindow::populateFileExplorer(const std::string& directoryPath)
@@ -152,6 +165,27 @@ void MainWindow::loadFile(const std::string& filePath)
     // Update text buffer with received file content
     std::string content(buffer, bytesRead);
     textBuffer->set_text(content);
+}
+
+void MainWindow::saveAndSendFile(const std::string& filePath)
+{
+    if (clientSocket < 0) {
+        cerr << "Error: Not connected to server\n";
+        return;
+    }
+
+    // Get the content of the text buffer
+    Gtk::TextBuffer::iterator start = textBuffer->begin();
+    Gtk::TextBuffer::iterator end = textBuffer->end();
+    std::string content = textBuffer->get_text(start, end);
+
+    // Send the file content to the server
+    std::string message = "UPDATE_FILE\n" + filePath + "\n" + content;
+    int bytesSent = send(clientSocket, message.c_str(), message.size(), 0);
+    if (bytesSent < 0) {
+        cerr << "Error: Failed to send data to server\n";
+        return;
+    }
 }
 
 void MainWindow::connectToServer()
