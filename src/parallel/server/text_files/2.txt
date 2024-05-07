@@ -1,0 +1,3 @@
+How to install - Linux
+Download the distribution file;
+Go to the folder where the .tar.gz file is and do the following to install MyNote to /usr/local/bin:
