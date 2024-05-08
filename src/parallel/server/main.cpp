@@ -52,7 +52,7 @@ class Database {
         // cout<<key<<endl;
         pthread_mutex_lock(&dbMutex);
         if(db.find(key) != db.end()) {
-        cout<<db[key]<<endl;
+        // cout<<db[key]<<endl;
         bool done = db.erase(key);
         pthread_mutex_unlock(&dbMutex);
         return "FIN";
@@ -129,7 +129,7 @@ string listTextFiles(const string& directoryPath) {
         }
     }
 
-    cout<<fileList<<endl;;
+    // cout<<fileList<<endl;;
     // Close directory
     closedir(dir);
 
@@ -138,22 +138,23 @@ string listTextFiles(const string& directoryPath) {
 
 
 void* HandleClient(void* arg) {
-
     int clientSocket = *((int*)arg);
     char buffer[1024];
     ssize_t bytesReceived;
-
+    // cout<<arg<<" "<<bytesReceived<<endl;;
     while(1){
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived == -1) {
+            // cout<<"nere"
             close(clientSocket);
             return NULL;
         }
 
         string temp = "";
         vector<string> msg;
+        cout<<"* "<<bytesReceived<<endl;
         for (int i = 0; i < bytesReceived; i++) {
-            cout<<temp<<endl;
+            // cout<<temp<<endl;
             if (buffer[i] != '\n') temp += buffer[i];
             else {
                 msg.push_back(temp);
@@ -163,13 +164,18 @@ void* HandleClient(void* arg) {
 
         int i = 0;
         int len = msg.size();
-        // cout<<len<<endl;
+        for(int i=0;i<len;i++){
+            cout<<msg[i]<<" ";
+        }
+        cout<<endl;
         while (i < len) {
             if(msg[i]=="GET_FILES"){
                 string response=listTextFiles("./server/text_files/");
+                // i++;
                 send(clientSocket,response.c_str(),response.size(),0);
             }
-            if(msg[i]=="GET_FILE"){
+            else if(msg[i]=="GET_FILE"){
+                sleep(0.1);
                 string filename="./server/text_files/";
                 filename=(i+1)<len?(filename+msg[++i]):"NULL";
                 ifstream file(filename);
@@ -181,19 +187,21 @@ void* HandleClient(void* arg) {
                 file.close();
 
                 send(clientSocket, fileContents.c_str(), fileContents.size(), 0);
-
+                cout<<"sent "<<fileContents<<endl;
             }
             else if(msg[i]=="UPDATE_FILE"){
-                string filename="./server/text_files/";
+                string filename="";
                 filename+=(i+1)<len?(filename+msg[++i]):"NULL";
                 ofstream file(filename);
+                // cout<<filename<<endl;
                 if (!file.is_open()) {
                     send(clientSocket, "ERROR", 5, 0);
                 } else {
                     string content = (i+1)<len?msg[++i]:"";
+                    cout<<content<<endl;
                     file << content;
                     file.close();
-                    send(clientSocket, "SUCCESS", 7, 0);
+                    // send(clientSocket, "SUCCESS", 7, 0);
                 }
             }
             if (msg[i] == "END") break;
@@ -201,7 +209,6 @@ void* HandleClient(void* arg) {
             i++;
         }
         string result = "\n";
-        cout<<result<<endl;
         send(clientSocket, result.c_str(), result.size(), 0);
     }
     close(clientSocket);
@@ -210,18 +217,26 @@ void* HandleClient(void* arg) {
 void* HandleQueue(void* arg) {
     while (1) {
         pthread_mutex_lock(&qMutex);
-        int clientSocket;
         if (clients.empty()) {
             pthread_cond_wait(&cv, &qMutex);
-            if (!clients.empty()) {
-                clientSocket = clients.front();
-                clients.pop();
-            }
         }
+        // Pop client socket from the queue
+        int clientSocket = clients.front();
+        clients.pop();
         pthread_mutex_unlock(&qMutex);
+        // Process client
         HandleClient(&clientSocket);
     }
 }
+
+void print(queue<int> clients){
+    while(!clients.empty()){
+        cout<<clients.front()<<" ";
+        clients.pop();
+    }
+    cout<<endl;
+}
+
 
 void* AcceptConnections(void* arg) {
     int serverSocket = *((int*)arg);
@@ -229,6 +244,7 @@ void* AcceptConnections(void* arg) {
         int clientSocket = AcceptConnection(serverSocket);
         pthread_mutex_lock(&qMutex);
         clients.push(clientSocket);
+        print(clients);
         pthread_cond_signal(&cv);
         pthread_mutex_unlock(&qMutex);
     }   

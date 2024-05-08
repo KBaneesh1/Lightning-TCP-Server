@@ -1,4 +1,1 @@
-When using Windows, do this using MSYS2
-
-You can manually call meson and ninja, just remember to pass to meson the flag --buildtype=debug since the default is release;
-Another option is to use the handy build-run.sh script, the script make the following calls:
+3

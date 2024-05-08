@@ -7,7 +7,7 @@ server: ./server/main.cpp
 
 
 run_server: server
-	./server/server 8000
+	./server/server 8080
 
 run_client: client
 	./client/client 
