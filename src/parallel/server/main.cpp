@@ -165,7 +165,7 @@ void* HandleClient(void* arg) {
         int i = 0;
         int len = msg.size();
         for(int i=0;i<len;i++){
-            cout<<msg[i]<<" ";
+            cout<<"mesage = "<<msg[i]<<endl;
         }
         cout<<endl;
         while (i < len) {
@@ -193,7 +193,7 @@ void* HandleClient(void* arg) {
                 string filename="";
                 filename+=(i+1)<len?(filename+msg[++i]):"NULL";
                 ofstream file(filename);
-                // cout<<filename<<endl;
+                 cout<<filename<<endl;
                 if (!file.is_open()) {
                     send(clientSocket, "ERROR", 5, 0);
                 } else {
@@ -201,7 +201,7 @@ void* HandleClient(void* arg) {
                     cout<<content<<endl;
                     file << content;
                     file.close();
-                    // send(clientSocket, "SUCCESS", 7, 0);
+                    send(clientSocket, "SUCCESS", 7, 0);
                 }
             }
             if (msg[i] == "END") break;
