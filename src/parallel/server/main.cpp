@@ -22,7 +22,7 @@ pthread_mutex_t dbMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 2;
+const int threadCount = 4;
 queue<int> clients;
 vector<int> editClients;
 
@@ -145,7 +145,7 @@ void* HandleClient(void* arg) {
     while(1){
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived == -1) {
-            // cout<<"nere"
+            perror("recv");
             close(clientSocket);
             return NULL;
         }
@@ -218,6 +218,7 @@ void* HandleClient(void* arg) {
                         content += msg[++i]+"\n";
                     //while(i+1<len)
                      //   content += (msg[++i]+"\n");
+                    cout<<"sontent = "<<content<<endl;
                     if(content!="")
                     {
                         fwrite(content.c_str(),sizeof(char),content.size(),file);
@@ -227,35 +228,20 @@ void* HandleClient(void* arg) {
                     //send(clientSocket, "SUCCESS", 7, 0);
                 }
             }
-            if (msg[i] == "CLIENT_CLOSE"){
+            if (msg[i] == "CLOSE_CLIENT"){
                 close(clientSocket);
-                return;
+                return NULL;
             }
-
             i++;
         }
         string result = "\n";
         send(clientSocket, result.c_str(), result.size(), 0);
     }
     close(clientSocket);
+    return NULL;
 }
-
-void* HandleQueue(void* arg) {
-    while (1) {
-        pthread_mutex_lock(&qMutex);
-        if (clients.empty()) {
-            pthread_cond_wait(&cv, &qMutex);
-        }
-        // Pop client socket from the queue
-        int clientSocket = clients.front();
-        clients.pop();
-        pthread_mutex_unlock(&qMutex);
-        // Process client
-        HandleClient(&clientSocket);
-    }
-}
-
 void print(queue<int> clients){
+    cout<<"in print queue\n";
     while(!clients.empty()){
         cout<<clients.front()<<" ";
         clients.pop();
@@ -264,13 +250,35 @@ void print(queue<int> clients){
 }
 
 
+void* HandleQueue(void* arg) {
+    pthread_t threadId = pthread_self();
+    cout<<"in thread = "<<threadId<<endl;
+    while (1) {
+        cout<<"in this thread loop = "<<threadId<<endl;
+        pthread_mutex_lock(&qMutex);
+        if (clients.empty()) {
+            pthread_cond_wait(&cv, &qMutex);
+        }
+        // Pop client socket from the queue
+        int clientSocket = clients.front();
+        //cout<<"client socker = "<<clientSocket<<" handled by "<<threadId<<endl;
+        clients.pop();
+        //print(clients);
+        pthread_mutex_unlock(&qMutex);
+        // Process client
+        HandleClient(&clientSocket);
+    }
+}
+
+
+
 void* AcceptConnections(void* arg) {
     int serverSocket = *((int*)arg);
     while (1) {
         int clientSocket = AcceptConnection(serverSocket);
         pthread_mutex_lock(&qMutex);
         clients.push(clientSocket);
-        print(clients);
+        //print(clients);
         pthread_cond_signal(&cv);
         pthread_mutex_unlock(&qMutex);
     }   
@@ -289,6 +297,7 @@ int main(int argc, char** argv) {
     pthread_t threadPool[threadCount];
 
     for (int i = 0; i < threadCount; i++) {
+        cout<<"thread no "<<i<<endl;
         pthread_create(&threadPool[i], NULL, HandleQueue, NULL);
     }
 

@@ -56,11 +56,13 @@ protected:
 
 MainWindow::~MainWindow() {
     // Close the connection with the server when the window is destroyed
+    //cout<<"in destructior"<<endl;
     closeConnection();
 }
 
 bool MainWindow::on_delete_event(GdkEventAny* event) {
     // Close the connection with the server when the window is closed
+    //cout<<"in delete event\n";
     closeConnection();
     return Gtk::Window::on_delete_event(event);
 }
@@ -69,7 +71,7 @@ void MainWindow::closeConnection() {
     // Send a specific message to the server indicating that the client is closing
     const char* closeMessage = "CLIENT_CLOSE\n";
     send(clientSocket, closeMessage, strlen(closeMessage), 0);
-
+    sleep(0.5);
     // Close the client socket
     close(clientSocket);
 }
