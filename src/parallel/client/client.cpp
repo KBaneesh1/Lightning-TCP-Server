@@ -42,7 +42,7 @@ protected:
     void loadFile(const std::string& filePath);
 
     void connectToServer();
-     void onTextChanged();
+    void onTextChanged();
 
     void saveAndSendFile(const std::string& filePath);
 
@@ -196,6 +196,8 @@ void MainWindow::saveAndSendFile(const std::string& filePath)
     std::string content = textBuffer->get_text(start, end);
     std::cout<<"sending update file path ="<<filePath<<endl;
     // Send the file content to the server
+    // cout<<"content here "<<content<<endl;
+    if(content[0]=='\n') content=content.substr(1);
     std::string message = "UPDATE_FILE\n" + filePath + "\n" + content;
     int bytesSent = send(clientSocket, message.c_str(), message.size(), 0);
     if (bytesSent < 0) {
