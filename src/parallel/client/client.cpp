@@ -7,7 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <gtkmm.h>
-
+#include<gdk/gdk.h>
 using namespace std;
 char buffer[1024] = {0};
 
@@ -48,24 +48,11 @@ protected:
 
     public:
     void populateFileExplorer(const std::string& directoryPath);
-    bool on_delete_event(GdkEventAny* event) override;
+    //bool on_delete_event(GdkEventAny* event) override;
 
     // Method to close the connection with the server
     void closeConnection();    
 };
-
-MainWindow::~MainWindow() {
-    // Close the connection with the server when the window is destroyed
-    //cout<<"in destructior"<<endl;
-    closeConnection();
-}
-
-bool MainWindow::on_delete_event(GdkEventAny* event) {
-    // Close the connection with the server when the window is closed
-    //cout<<"in delete event\n";
-    closeConnection();
-    return Gtk::Window::on_delete_event(event);
-}
 
 void MainWindow::closeConnection() {
     // Send a specific message to the server indicating that the client is closing
@@ -73,8 +60,24 @@ void MainWindow::closeConnection() {
     send(clientSocket, closeMessage, strlen(closeMessage), 0);
     sleep(0.5);
     // Close the client socket
-    close(clientSocket);
+    //close(clientSocket);
+    return;
 }
+
+MainWindow::~MainWindow() {
+    // Close the connection with the server when the window is destroyed
+    //cout<<"in destructior"<<endl;
+    closeConnection();
+}
+/*
+bool MainWindow::on_delete_event(GdkEventAny* event) {
+    // Close the connection with the server when the window is closed
+    //cout<<"in delete event\n";
+    closeConnection();
+    return Gtk::Window::on_delete_event(event);
+}
+
+*/
 
 MainWindow::MainWindow() : clientSocket(-1)
 {

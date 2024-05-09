@@ -22,7 +22,7 @@ pthread_mutex_t dbMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 4;
+const int threadCount = 5;
 queue<int> clients;
 vector<int> editClients;
 
@@ -234,8 +234,11 @@ void* HandleClient(void* arg) {
             }
             i++;
         }
-        string result = "\n";
-        send(clientSocket, result.c_str(), result.size(), 0);
+        if(len==0)
+       {
+        
+            break;
+        }
     }
     close(clientSocket);
     return NULL;
@@ -254,9 +257,9 @@ void* HandleQueue(void* arg) {
     pthread_t threadId = pthread_self();
     cout<<"in thread = "<<threadId<<endl;
     while (1) {
-        cout<<"in this thread loop = "<<threadId<<endl;
+        //cout<<"in this thread loop = "<<threadId<<endl;
         pthread_mutex_lock(&qMutex);
-        if (clients.empty()) {
+        while (clients.empty()) {
             pthread_cond_wait(&cv, &qMutex);
         }
         // Pop client socket from the queue
@@ -266,7 +269,9 @@ void* HandleQueue(void* arg) {
         //print(clients);
         pthread_mutex_unlock(&qMutex);
         // Process client
-        HandleClient(&clientSocket);
+        if(clientSocket!=-1)
+            HandleClient(&clientSocket);
+        cout<<"after handle client\n";
     }
 }
 
@@ -278,8 +283,9 @@ void* AcceptConnections(void* arg) {
         int clientSocket = AcceptConnection(serverSocket);
         pthread_mutex_lock(&qMutex);
         clients.push(clientSocket);
-        //print(clients);
+        print(clients);
         pthread_cond_signal(&cv);
+        cout<<"after signal\n";
         pthread_mutex_unlock(&qMutex);
     }   
 }
