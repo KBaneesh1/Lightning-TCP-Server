@@ -208,6 +208,7 @@ void MainWindow::onTextChanged()
 {
     // Get the currently selected file from the file tree view
     Gtk::TreeModel::iterator iter = fileTreeView.get_selection()->get_selected();
+    std::cout<<"on text selected"<<endl;
     if (iter)
     {
         Gtk::TreeModel::Row row = *iter;
