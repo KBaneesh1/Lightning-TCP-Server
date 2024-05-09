@@ -144,7 +144,7 @@ void MainWindow::loadFile(const std::string& filePath)
         cerr << "Error: Not connected to server\n";
         return;
     }
-
+    
     // Send request to server to get file content
     std::cout<<filePath<<std::endl;
     std::string message = "GET_FILE\n" + filePath + "\n";

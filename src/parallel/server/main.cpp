@@ -22,7 +22,7 @@ pthread_mutex_t dbMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 10;
+const int threadCount = 3;
 queue<int> clients;
 vector<int> editClients;
 
@@ -167,7 +167,8 @@ void* HandleClient(void* arg) {
         for(int i=0;i<len;i++){
             cout<<"mesage = "<<msg[i]<<endl;
         }
-        cout<<endl;
+        
+        cout<<"length = "<<len<<endl;
         while (i < len) {
             if(msg[i]=="GET_FILES"){
                 string response=listTextFiles("./server/text_files/");
@@ -195,13 +196,15 @@ void* HandleClient(void* arg) {
                 ofstream file(filename);
                  cout<<filename<<endl;
                 if (!file.is_open()) {
-                    send(clientSocket, "ERROR", 5, 0);
+                    cout<<"error updating file\n";
+                    //send(clientSocket, "ERROR", 5, 0);
                 } else {
                     string content = (i+1)<len?msg[++i]:"";
-                    cout<<content<<endl;
+                    cout<<"content="<<content.size()<<endl;
                     file << content;
                     file.close();
-                    send(clientSocket, "SUCCESS", 7, 0);
+                    cout<<"Successfully written\n";
+                    //send(clientSocket, "SUCCESS", 7, 0);
                 }
             }
             if (msg[i] == "END") break;
