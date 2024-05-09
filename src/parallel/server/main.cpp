@@ -22,7 +22,7 @@ pthread_mutex_t dbMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 3;
+const int threadCount = 2;
 queue<int> clients;
 vector<int> editClients;
 
@@ -227,7 +227,10 @@ void* HandleClient(void* arg) {
                     //send(clientSocket, "SUCCESS", 7, 0);
                 }
             }
-            if (msg[i] == "END") break;
+            if (msg[i] == "CLIENT_CLOSE"){
+                close(clientSocket);
+                return;
+            }
 
             i++;
         }

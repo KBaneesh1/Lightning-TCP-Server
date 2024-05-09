@@ -16,7 +16,7 @@ class MainWindow : public Gtk::Window
 {
 public:
     MainWindow();
-
+    virtual ~MainWindow();
 protected:
     Gtk::Box mainBox;
     Gtk::Box fileExplorerBox;
@@ -48,7 +48,31 @@ protected:
 
     public:
     void populateFileExplorer(const std::string& directoryPath);
+    bool on_delete_event(GdkEventAny* event) override;
+
+    // Method to close the connection with the server
+    void closeConnection();    
 };
+
+MainWindow::~MainWindow() {
+    // Close the connection with the server when the window is destroyed
+    closeConnection();
+}
+
+bool MainWindow::on_delete_event(GdkEventAny* event) {
+    // Close the connection with the server when the window is closed
+    closeConnection();
+    return Gtk::Window::on_delete_event(event);
+}
+
+void MainWindow::closeConnection() {
+    // Send a specific message to the server indicating that the client is closing
+    const char* closeMessage = "CLIENT_CLOSE\n";
+    send(clientSocket, closeMessage, strlen(closeMessage), 0);
+
+    // Close the client socket
+    close(clientSocket);
+}
 
 MainWindow::MainWindow() : clientSocket(-1)
 {
