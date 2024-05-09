@@ -206,18 +206,23 @@ void* HandleClient(void* arg) {
             else if(msg[i]=="UPDATE_FILE"){
                 string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
-                ofstream file(filename);
+                FILE *file = fopen(filename.c_str(),"w");
+                
                  cout<<"filename in update"<<filename<<endl;
-                if (!file.is_open()) {
+                if (!file) {
                     cout<<"error updating file\n";
                     //send(clientSocket, "ERROR", 5, 0);
                 } else {
-                    string content = (i+1)<len?msg[++i]:"";
+                    string content="";
+                    while(i+1<len)
+                        content += msg[++i]+"\n";
                     //while(i+1<len)
                      //   content += (msg[++i]+"\n");
-                    cout<<"content="<<content<<endl;
-                    file << content;
-                    file.close();
+                    if(content!="")
+                    {
+                        fwrite(content.c_str(),sizeof(char),content.size(),file);
+                    }
+                    fclose(file);
                     cout<<"Successfully written\n";
                     //send(clientSocket, "SUCCESS", 7, 0);
                 }
