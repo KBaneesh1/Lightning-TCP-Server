@@ -154,7 +154,7 @@ void MainWindow::loadFile(const std::string& filePath)
         cerr << "Error: Failed to send data to server\n";
         return;
     }
-    
+    char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
 
     int bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
@@ -164,13 +164,23 @@ void MainWindow::loadFile(const std::string& filePath)
         cerr << "Error: Failed to receive data from server\n";
         return;
     }
-
+    std::string response(buffer,bytesRead);
+    cout<<"response = "<<response<<endl;
+    size_t start = response.find("RESPONSE");
+    size_t end = response.find("END");
+    if(start!=std::string::npos && end != std::string::npos){
+        std::string content = response.substr(start+strlen("RESPONSE"),end - start-strlen("RESPONSE"));
+        textBuffer->set_text(content);
+    }
+    else{
+        cerr<<"error from reading\n";
+    }
     // Update text buffer with received file content
-    std::string content(buffer, bytesRead);
+    
     // memset(buffer, 0, sizeof(buffer));
 
     
-    textBuffer->set_text(content);
+    
 }
 
 void MainWindow::saveAndSendFile(const std::string& filePath)
@@ -184,7 +194,7 @@ void MainWindow::saveAndSendFile(const std::string& filePath)
     Gtk::TextBuffer::iterator start = textBuffer->begin();
     Gtk::TextBuffer::iterator end = textBuffer->end();
     std::string content = textBuffer->get_text(start, end);
-
+    std::cout<<"sending update file path ="<<filePath<<endl;
     // Send the file content to the server
     std::string message = "UPDATE_FILE\n" + filePath + "\n" + content;
     int bytesSent = send(clientSocket, message.c_str(), message.size(), 0);

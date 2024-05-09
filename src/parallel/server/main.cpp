@@ -176,31 +176,46 @@ void* HandleClient(void* arg) {
                 send(clientSocket,response.c_str(),response.size(),0);
             }
             else if(msg[i]=="GET_FILE"){
+                cout<<"in get file\n";
                 sleep(0.1);
                 string filename="./server/text_files/";
-                filename=(i+1)<len?(filename+msg[++i]):"NULL";
+                filename =(i+1)<len?(filename+msg[++i]):"NULL";
+                
                 ifstream file(filename);
+                cout<<"filename in getfile "<<filename<<endl;
+                if(!file.is_open()){
+                    cerr<<"error opening in get file"<<endl;
+                }
                 string fileContents;
-
+                string line;
+                //while(getline(file,line)){
+                //    fileContents += line;
+                //}
                 stringstream buffer;
                 buffer << file.rdbuf();
                 fileContents = buffer.str();
                 file.close();
-
-                send(clientSocket, fileContents.c_str(), fileContents.size(), 0);
+                string final;
+                final = "RESPONSE\n"+fileContents+"\nEND";
+                //cout<<"buffer = "<<file<<endl;
+                //fileContents = buffer.str();
                 cout<<"sent "<<fileContents<<endl;
+
+                send(clientSocket, final.c_str(), final.size(), 0);
             }
             else if(msg[i]=="UPDATE_FILE"){
-                string filename="";
-                filename+=(i+1)<len?(filename+msg[++i]):"NULL";
+                string filename="./server/text_files/";
+                filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 ofstream file(filename);
-                 cout<<filename<<endl;
+                 cout<<"filename in update"<<filename<<endl;
                 if (!file.is_open()) {
                     cout<<"error updating file\n";
                     //send(clientSocket, "ERROR", 5, 0);
                 } else {
                     string content = (i+1)<len?msg[++i]:"";
-                    cout<<"content="<<content.size()<<endl;
+                    //while(i+1<len)
+                     //   content += (msg[++i]+"\n");
+                    cout<<"content="<<content<<endl;
                     file << content;
                     file.close();
                     cout<<"Successfully written\n";
