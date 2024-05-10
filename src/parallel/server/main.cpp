@@ -10,15 +10,14 @@
 #include <unordered_map>
 #include <unistd.h>
 #include <fstream>
-#include<dirent.h>
+#include <dirent.h>
 #include <sstream> 
-
+#include <list>
 
 
 //FINAL
 using namespace std;
-
-pthread_mutex_t dbMutex;
+pthread_mutex_t cacheMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
@@ -26,45 +25,101 @@ const int threadCount = 5;
 queue<int> clients;
 vector<int> editClients;
 
-class Database {
+string readFile(string filename){    
+    ifstream file(filename);
+    // cout<<"filename in getfile "<<filename<<endl;
+    if(!file.is_open()){
+        cerr<<"error opening in get file"<<endl;
+    }
+    string fileContents;
+    string line;
+    //while(getline(file,line)){
+    //    fileContents += line;
+    //}
+    stringstream buffer;
+    buffer << file.rdbuf();
+    fileContents = buffer.str();
+    file.close();
+    string final;
+    final = "RESPONSE\n"+fileContents+"\nEND";
+    return final;
+}
+
+
+void writeFile(string filename, string content) {
+    FILE *file = fopen(filename.c_str(),"w");
+    if (!file) {
+        cout<<"error updating file\n";
+        //send(clientSocket, "ERROR", 5, 0);
+    } else {
+        cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"<<endl;
+        cout<<"writing content "<< content<<endl;
+        if(content!="" and content!="\n")
+        {
+            fwrite(content.c_str(),sizeof(char),content.size(),file);
+        }
+        fclose(file);
+    }
+}
+
+
+class LRUCache {
     private:
-    unordered_map<string, string> db;
+        unordered_map<string, pair<string, list<string>::iterator>> cache;
+        list<string> lruList;
+        size_t capacity;
 
     public:
-    string write(string key, string value) {
-        pthread_mutex_lock(&dbMutex);
-        db[key] = value;
-        pthread_mutex_unlock(&dbMutex);
-        return "FIN";
-    }
+        LRUCache(size_t cap) : capacity(cap) {}
 
-    string read(string key) {
-        unordered_map<string, string>::iterator iter = db.find(key);
-        if (iter == db.end()) return "NULL";
-        return iter->second;
-    }
+        string read(string key) {
+            // key here is filename
+            if (cache.find(key) == cache.end()) {
+                return "NULL"; // Not found
+            }
+            // Move accessed key to the front of the list (most recently used)
+            lruList.splice(lruList.begin(), lruList, cache[key].second);
+            return cache[key].first;
+        }
 
-    int count() {
-        return db.size();
-    }
+        void write(const string& key, const string& value) {
+            if (cache.find(key) != cache.end()) {
+                // If key exists, update the value and move it to the front
+                pthread_mutex_lock(&cacheMutex);
+                cache[key].first = value;
+                lruList.splice(lruList.begin(), lruList, cache[key].second);
+                pthread_mutex_unlock(&cacheMutex);
+                writeFile(key, value);
+                return;
+            }
 
-    string remove(string key) {
-        // cout<<key<<endl;
-        pthread_mutex_lock(&dbMutex);
-        if(db.find(key) != db.end()) {
-        // cout<<db[key]<<endl;
-        bool done = db.erase(key);
-        pthread_mutex_unlock(&dbMutex);
-        return "FIN";
-      }
-   
-        pthread_mutex_unlock(&dbMutex);
-        return "NULL";
-    
+            // If cache is full, remove the least recently used item
+            if (cache.size() >= capacity) {
+                string lruKey = lruList.back();
+                lruList.pop_back();
+                cache.erase(lruKey);
+            }
+
+            // Add the new key-value pair to the cache
+            lruList.push_front(key);
+            pthread_mutex_lock(&cacheMutex);
+            cache[key] = {value, lruList.begin()};
+            pthread_mutex_unlock(&cacheMutex);
+            writeFile(key, value);
+        }
+
+        // Display the contents of the cache
+        void display() {
+            cout << "Cache Contents:" << endl;
+            for (const auto& entry : cache) {
+                cout << entry.first << ": " << entry.second.first << endl;
+            }
+            cout << endl;
     }
 };
 
-Database db;
+LRUCache db_cache(3);
+
 
 int CreateSocket(int portno) {
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -152,7 +207,7 @@ void* HandleClient(void* arg) {
 
         string temp = "";
         vector<string> msg;
-        cout<<"* "<<bytesReceived<<endl;
+        // cout<<"* "<<bytesReceived<<endl;
         for (int i = 0; i < bytesReceived; i++) {
             // cout<<temp<<endl;
             if (buffer[i] != '\n') temp += buffer[i];
@@ -164,69 +219,44 @@ void* HandleClient(void* arg) {
 
         int i = 0;
         int len = msg.size();
-        for(int i=0;i<len;i++){
-            cout<<"mesage = "<<msg[i]<<endl;
-        }
+        // for(int i=0;i<len;i++){
+        //     cout<<"mesage = "<<msg[i]<<endl;
+        // }
         
-        cout<<"length = "<<len<<endl;
+        // cout<<"length = "<<len<<endl;
         while (i < len) {
+            cout<<msg[i]<<endl;
             if(msg[i]=="GET_FILES"){
                 string response=listTextFiles("./server/text_files/");
                 // i++;
                 send(clientSocket,response.c_str(),response.size(),0);
             }
             else if(msg[i]=="GET_FILE"){
-                cout<<"in get file\n";
+                // cout<<"in get file\n";
                 sleep(0.1);
                 string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
-                
-                ifstream file(filename);
-                cout<<"filename in getfile "<<filename<<endl;
-                if(!file.is_open()){
-                    cerr<<"error opening in get file"<<endl;
-                }
-                string fileContents;
-                string line;
-                //while(getline(file,line)){
-                //    fileContents += line;
-                //}
-                stringstream buffer;
-                buffer << file.rdbuf();
-                fileContents = buffer.str();
-                file.close();
+                string exact_file = (i+1)<len?(msg[++i]):"NULL";
                 string final;
-                final = "RESPONSE\n"+fileContents+"\nEND";
-                //cout<<"buffer = "<<file<<endl;
-                //fileContents = buffer.str();
-                cout<<"sent "<<fileContents<<endl;
-
+                final = db_cache.read(exact_file);
+                if(final == "NULL") {
+                    final = readFile(filename);
+                }
                 send(clientSocket, final.c_str(), final.size(), 0);
             }
+
             else if(msg[i]=="UPDATE_FILE"){
                 string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
-                FILE *file = fopen(filename.c_str(),"w");
-                
-                 cout<<"filename in update"<<filename<<endl;
-                if (!file) {
-                    cout<<"error updating file\n";
-                    //send(clientSocket, "ERROR", 5, 0);
-                } else {
-                    string content="";
-                    while(i+1<len)
-                        content += msg[++i]+"\n";
-                    //while(i+1<len)
-                     //   content += (msg[++i]+"\n");
-                    cout<<"sontent = "<<content<<endl;
-                    if(content!="")
-                    {
-                        fwrite(content.c_str(),sizeof(char),content.size(),file);
-                    }
-                    fclose(file);
-                    cout<<"Successfully written\n";
-                    //send(clientSocket, "SUCCESS", 7, 0);
+                string content="";
+
+                while(i+1<len and msg[i+1]!="UPDATE_FILE" and msg[i+1]!="GET_FILE" and msg[i+1]!="GET_FILES" and msg[i+1]!="\n"){
+                    cout<<"* "<<msg[i+1]<<endl;
+                    content+=msg[++i]+"\n";
                 }
+                db_cache.write(filename, content);
+                // cache will call file writing function on its own
+                
             }
             if (msg[i] == "CLOSE_CLIENT"){
                 close(clientSocket);
@@ -243,14 +273,29 @@ void* HandleClient(void* arg) {
     close(clientSocket);
     return NULL;
 }
-void print(queue<int> clients){
-    cout<<"in print queue\n";
-    while(!clients.empty()){
-        cout<<clients.front()<<" ";
+
+void* HandleQueue(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&qMutex);
+        if (clients.empty()) {
+            pthread_cond_wait(&cv, &qMutex);
+        }
+        // Pop client socket from the queue
+        int clientSocket = clients.front();
         clients.pop();
+        pthread_mutex_unlock(&qMutex);
+        // Process client
+        HandleClient(&clientSocket);
     }
-    cout<<endl;
 }
+
+// void print(queue<int> clients){
+//     while(!clients.empty()){
+//         cout<<clients.front()<<" ";
+//         clients.pop();
+//     }
+//     cout<<endl;
+// }
 
 
 void* HandleQueue(void* arg) {
@@ -283,7 +328,7 @@ void* AcceptConnections(void* arg) {
         int clientSocket = AcceptConnection(serverSocket);
         pthread_mutex_lock(&qMutex);
         clients.push(clientSocket);
-        print(clients);
+        // print(clients);
         pthread_cond_signal(&cv);
         cout<<"after signal\n";
         pthread_mutex_unlock(&qMutex);
