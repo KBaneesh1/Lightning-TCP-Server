@@ -46,6 +46,7 @@ class LRUCache {
                 lruList.splice(lruList.begin(), lruList, cache[key].second);
                 pthread_mutex_unlock(&cacheMutex);
                 writeFile(key, value);
+                return;
             }
 
             // If cache is full, remove the least recently used item
@@ -60,9 +61,7 @@ class LRUCache {
             pthread_mutex_lock(&cacheMutex);
             cache[key] = {value, lruList.begin()};
             pthread_mutex_unlock(&cacheMutex);
-            string result = db.write(key, value) + "\n";
-
-            return result;
+            writeFile(key, value);
         }
 
         // Display the contents of the cache

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "qtcpsocket": "cpp",
+        "string": "cpp",
+        "ostream": "cpp"
+    }
+}
