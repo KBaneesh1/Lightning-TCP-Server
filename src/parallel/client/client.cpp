@@ -89,9 +89,7 @@ MainWindow::MainWindow() : clientSocket(-1)
     set_child(mainBox);
     
     // Create the "Create File" button and connect its clicked signal to the callback
-    createFileButton.set_label("Create File");
-    createFileButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::onCreateFileClicked));
-    mainBox.append(createFileButton);
+    
     // Set up the file explorer pane
     fileTreeStore = Gtk::TreeStore::create(columns);
     fileTreeView.set_model(fileTreeStore);
@@ -109,6 +107,10 @@ MainWindow::MainWindow() : clientSocket(-1)
     textEditorTextView.set_buffer(textBuffer);
     textEditorTextView.set_size_request(550,1);
     mainBox.append(textEditorTextView);
+
+    createFileButton.set_label("Create File");
+    createFileButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::onCreateFileClicked));
+    mainBox.append(createFileButton);
 
     // Connect signals
     fileTreeView.signal_cursor_changed().connect(sigc::mem_fun(*this, &MainWindow::onFileSelectionChanged));
@@ -277,15 +279,49 @@ void MainWindow::connectToServer()
     populateFileExplorer("./");
 }
 
+// void MainWindow::onCreateFileClicked()
+// {
+//     Gtk::Dialog dialog("Enter File Name", *this);
+//     dialog.set_modal(true);
+//     dialog.set_default_size(200, 100);
+
+//     Gtk::Box *contentArea = dialog.get_content_area();
+//     Gtk::Entry entry;
+//     contentArea->pack_start(entry, Gtk::PACK_SHRINK);
+
+//     dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+//     dialog.add_button("Create", Gtk::RESPONSE_OK);
+
+//     dialog.show_all_children();
+
+//     int result = dialog.run();
+//     if (result == Gtk::RESPONSE_OK)
+//     {
+//         std::string filename = entry.get_text();
+//         if (!filename.empty())
+//         {
+//             std::string message = "CREATE_FILE\n" + filename + "\n";
+//             int bytesSent = send(clientSocket, message.c_str(), message.size(), 0);
+//             if (bytesSent < 0)
+//             {
+//                 cerr << "Error: Failed to send data to server\n";
+//                 return;
+//             }
+//             populateFileExplorer("./");
+//         }
+//     }
+// }
 void MainWindow::onCreateFileClicked()
 {
     Gtk::Dialog dialog("Enter File Name", *this);
     dialog.set_modal(true);
     dialog.set_default_size(200, 100);
 
-    Gtk::Box *contentArea = dialog.get_content_area();
+    Gtk::Box *contentArea = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
     Gtk::Entry entry;
-    contentArea->pack_start(entry, Gtk::PACK_SHRINK);
+    contentArea->add(entry);
+
+    dialog.get_content_area()->add(*contentArea);
 
     dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
     dialog.add_button("Create", Gtk::RESPONSE_OK);
@@ -309,6 +345,7 @@ void MainWindow::onCreateFileClicked()
         }
     }
 }
+
 
 int main(int argc, char* argv[])
 {
