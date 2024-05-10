@@ -3,20 +3,64 @@
 #include <string>
 #include <cstring>
 #include <pthread.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
+// #include <sys/socket.h>
+// #include <arpa/inet.h>
 #include <iostream>
 #include <queue>
 #include <unordered_map>
 #include <unistd.h>
 #include <fstream>
-#include<dirent.h>
+#include <dirent.h>
 #include <sstream> 
-
+#include <list>
 
 
 //FINAL
 using namespace std;
+pthread_mutex_t cacheMutex;
+pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+
+const int threadCount = 3;
+queue<int> clients;
+vector<int> editClients;
+
+string readFile(string filename){    
+    ifstream file(filename);
+    // cout<<"filename in getfile "<<filename<<endl;
+    if(!file.is_open()){
+        cerr<<"error opening in get file"<<endl;
+    }
+    string fileContents;
+    string line;
+    //while(getline(file,line)){
+    //    fileContents += line;
+    //}
+    stringstream buffer;
+    buffer << file.rdbuf();
+    fileContents = buffer.str();
+    file.close();
+    string final;
+    final = "RESPONSE\n"+fileContents+"\nEND";
+    return final;
+}
+
+
+void writeFile(string filename, string content) {
+    FILE *file = fopen(filename.c_str(),"w");
+    if (!file) {
+        cout<<"error updating file\n";
+        //send(clientSocket, "ERROR", 5, 0);
+    } else {
+        cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"<<endl;
+        cout<<"writing content "<< content<<endl;
+        if(content!="" and content!="\n")
+        {
+            fwrite(content.c_str(),sizeof(char),content.size(),file);
+        }
+        fclose(file);
+    }
+}
 
 
 class LRUCache {
@@ -75,13 +119,6 @@ class LRUCache {
 };
 
 LRUCache db_cache(3);
-
-pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
-
-const int threadCount = 3;
-queue<int> clients;
-vector<int> editClients;
 
 
 int CreateSocket(int portno) {
@@ -154,42 +191,6 @@ string listTextFiles(const string& directoryPath) {
     return fileList;
 }
 
-string readFile(string filename){    
-    ifstream file(filename);
-    // cout<<"filename in getfile "<<filename<<endl;
-    if(!file.is_open()){
-        cerr<<"error opening in get file"<<endl;
-    }
-    string fileContents;
-    string line;
-    //while(getline(file,line)){
-    //    fileContents += line;
-    //}
-    stringstream buffer;
-    buffer << file.rdbuf();
-    fileContents = buffer.str();
-    file.close();
-    string final;
-    final = "RESPONSE\n"+fileContents+"\nEND";
-    return final;
-}
-
-
-void writeFile(string filename, string content) {
-    FILE *file = fopen(filename.c_str(),"w");
-    if (!file) {
-        cout<<"error updating file\n";
-        //send(clientSocket, "ERROR", 5, 0);
-    } else {
-        cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"<<endl;
-        cout<<"writing vontent "<< content<<endl;
-        if(content!="" and content!="\n")
-        {
-            fwrite(content.c_str(),sizeof(char),content.size(),file);
-        }
-        fclose(file);
-    }
-}
 
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
