@@ -180,7 +180,7 @@ string listTextFiles(const string& directoryPath) {
         }
     }
 
-    cout<<"list files = "<<fileList<<endl;;
+    // cout<<fileList<<endl;;
     // Close directory
     closedir(dir);
 
@@ -190,14 +190,13 @@ string listTextFiles(const string& directoryPath) {
 
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
-    cout<<"isnide handleclient ="<<clientSocket<<endl;
     char buffer[1024];
     ssize_t bytesReceived;
     // cout<<arg<<" "<<bytesReceived<<endl;;
     while(1){
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived == -1) {
-             cout<<"nere";
+            // cout<<"nere"
             close(clientSocket);
             return NULL;
         }
@@ -224,7 +223,7 @@ void* HandleClient(void* arg) {
         while (i < len) {
             cout<<msg[i]<<endl;
             if(msg[i]=="GET_FILES"){
-                string response=listTextFiles("./text_files/");
+                string response=listTextFiles("./server/text_files/");
                 // i++;
                 send(clientSocket,response.c_str(),response.size(),0);
             }
@@ -243,7 +242,7 @@ void* HandleClient(void* arg) {
             }
 
             else if(msg[i]=="UPDATE_FILE"){
-                string filename="./text_files/";
+                string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string content="";
 
@@ -282,11 +281,9 @@ int main(int argc, char** argv) {
     while (1) {
         int clientSocket = AcceptConnection(serverSocket);
         if (clientSocket != -1) {
-            cout<<"accepted client ="<<clientSocket<<endl;
-            HandleClient((void*)&clientSocket);
-        //    pthread_t serial;
-        //    pthread_create(&serial, NULL, HandleClient, (void*)&clientSocket);
-        //    pthread_join(serial, NULL); // Wait for the thread to finish before accepting the next connection
+            pthread_t serial;
+            pthread_create(&serial, NULL, HandleClient, (void*)&clientSocket);
+            pthread_join(serial, NULL); // Wait for the thread to finish before accepting the next connection
         }
     }
 

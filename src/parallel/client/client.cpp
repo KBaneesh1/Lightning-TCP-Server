@@ -257,6 +257,7 @@ void MainWindow::onTextChanged()
 }
 
 
+
 void MainWindow::connectToServer()
 {
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
