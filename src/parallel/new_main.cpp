@@ -27,6 +27,7 @@ void closeConnection(int serverSd, int clientSd);
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t req_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_var = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t cacheMutex;
 class Database {
     private:
     unordered_map<string, string> db;
@@ -74,6 +75,82 @@ class Database {
 queue<int>req; // put the request to queue , then handle it
 pthread_t arr[threadCount]; //array of threads
 Database db;
+
+class LRUCache {
+    private:
+        unordered_map<string, pair<string, list<string>::iterator>> cache;
+        list<string> lruList;
+        size_t capacity;
+
+    public:
+        LRUCache(size_t cap) : capacity(cap) {}
+
+        string read(string key) {
+            cout<<"inside cache read\n";
+            if (cache.find(key) == cache.end()) {
+                return "NULL"; // Not found
+            }
+            // Move accessed key to the front of the list (most recently used)
+            lruList.splice(lruList.begin(), lruList, cache[key].second);
+            return cache[key].first;
+        }
+
+        string write(const string& key, const string& value) {
+            cout<<"inside cache write\n";
+            if (cache.find(key) != cache.end()) {
+                // If key exists, update the value and move it to the front
+                pthread_mutex_lock(&cacheMutex);
+                cache[key].first = value;
+                lruList.splice(lruList.begin(), lruList, cache[key].second);
+                pthread_mutex_unlock(&cacheMutex);
+                string result = db.write(key, value) + "\n";
+                return result;
+            }
+
+            // If cache is full, remove the least recently used item
+            if (cache.size() >= capacity) {
+                string lruKey = lruList.back();
+                lruList.pop_back();
+                cache.erase(lruKey);
+            }
+
+            // Add the new key-value pair to the cache
+            lruList.push_front(key);
+            pthread_mutex_lock(&cacheMutex);
+            cache[key] = {value, lruList.begin()};
+            pthread_mutex_unlock(&cacheMutex);
+            string result = db.write(key, value) + "\n";
+
+            return result;
+        }
+
+        // Display the contents of the cache
+        void display() {
+            cout << "Cache Contents:" << endl;
+            for (const auto& entry : cache) {
+                cout << entry.first << ": " << entry.second.first << endl;
+            }
+            cout << endl;
+    }
+};
+LRUCache db_cache(3);
+
+string handleRead(string key) {
+    string value = db_cache.read(key);
+    string nul = "NULL";
+    if(value.compare("NULL")==0) {
+        return value + "\n";
+    }
+    return db.read(key) + "\n";
+}
+
+string handleWrite(string key, string value) {
+    // all writes happen through the cache only
+    // cache kind of writes back to the database
+    string result = db_cache.write(key, value);
+    return result + "\n";
+}
+
 
 void *scheduler(void *arg){
     while(true){
@@ -235,7 +312,7 @@ void handleClient(int p_socket)
                 // if(value[0]==':')
                 //     value.erase(0,1);
                 // mp[key] = value;
-                 store = db.write(key,value)+"\n";
+                 store = handleWrite(key, value);
                	// pthread_mutex_unlock(&map_lock);
                 // store = resp+"\n";
                 
@@ -248,7 +325,7 @@ void handleClient(int p_socket)
                 // if(mp.find(key)!=mp.end()){
                 //     store = mp[key]+"\n";
                 // }
-                store = db.read(key)+"\n";
+                store = handleRead(key);
                 
             }
             else
@@ -313,6 +390,8 @@ void handleClient(int p_socket)
                     store = "File read complete\n";
                 }
             }
+            cout<<"display cache\n";
+            db_cache.display();
             // Send the response to the client
             bytesWritten = send(clientSd, store.c_str(), store.size(), 0);
         }	
