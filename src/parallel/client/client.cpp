@@ -23,6 +23,7 @@ protected:
     Gtk::TreeView fileTreeView;
     Gtk::ScrolledWindow fileScrolledWindow;
     Gtk::TextView textEditorTextView;
+    Gtk::Button createFileButton;
     Glib::RefPtr<Gtk::TextBuffer> textBuffer;
     Glib::RefPtr<Gtk::TreeStore> fileTreeStore;
     struct Columns : public Gtk::TreeModel::ColumnRecord
@@ -38,7 +39,7 @@ protected:
     int clientSocket;
 
     void onFileSelectionChanged();
-
+    void onCreateFileClicked();
     void loadFile(const std::string& filePath);
 
     void connectToServer();
@@ -86,7 +87,11 @@ MainWindow::MainWindow() : clientSocket(-1)
 
     // Set up the main box
     set_child(mainBox);
-
+    
+    // Create the "Create File" button and connect its clicked signal to the callback
+    createFileButton.set_label("Create File");
+    createFileButton.signal_clicked().connect(sigc::mem_fun(*this, &MainWindow::onCreateFileClicked));
+    mainBox.append(createFileButton);
     // Set up the file explorer pane
     fileTreeStore = Gtk::TreeStore::create(columns);
     fileTreeView.set_model(fileTreeStore);
@@ -270,6 +275,39 @@ void MainWindow::connectToServer()
     }
     
     populateFileExplorer("./");
+}
+
+void MainWindow::onCreateFileClicked()
+{
+    Gtk::Dialog dialog("Enter File Name", *this);
+    dialog.set_modal(true);
+    dialog.set_default_size(200, 100);
+
+    Gtk::Box *contentArea = dialog.get_content_area();
+    Gtk::Entry entry;
+    contentArea->pack_start(entry, Gtk::PACK_SHRINK);
+
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Create", Gtk::RESPONSE_OK);
+
+    dialog.show_all_children();
+
+    int result = dialog.run();
+    if (result == Gtk::RESPONSE_OK)
+    {
+        std::string filename = entry.get_text();
+        if (!filename.empty())
+        {
+            std::string message = "CREATE_FILE\n" + filename + "\n";
+            int bytesSent = send(clientSocket, message.c_str(), message.size(), 0);
+            if (bytesSent < 0)
+            {
+                cerr << "Error: Failed to send data to server\n";
+                return;
+            }
+            populateFileExplorer("./");
+        }
+    }
 }
 
 int main(int argc, char* argv[])

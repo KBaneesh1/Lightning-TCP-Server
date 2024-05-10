@@ -244,7 +244,13 @@ void* HandleClient(void* arg) {
                 }
                 send(clientSocket, final.c_str(), final.size(), 0);
             }
-
+            else if(msg[i]=="CREATE_FILE"){
+                string filename="./server/text_files/";
+                filename += (i+1)<len?msg[++i]:"NULL";
+                ofstream newFile(filename);
+                newFile.close();
+            }
+            
             else if(msg[i]=="UPDATE_FILE"){
                 string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
