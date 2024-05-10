@@ -4,7 +4,7 @@
 #include <cstring>
 #include <pthread.h>
 #include <sys/socket.h>
- #include <arpa/inet.h>
+#include <arpa/inet.h>
 #include <iostream>
 #include <queue>
 #include <unordered_map>
@@ -230,7 +230,7 @@ void* HandleClient(void* arg) {
             else if(msg[i]=="GET_FILE"){
                 // cout<<"in get file\n";
                 sleep(0.1);
-                string filename="./server/text_files/";
+                string filename="./text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string exact_file = (i+1)<len?(msg[++i]):"NULL";
                 string final;
