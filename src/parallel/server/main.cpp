@@ -21,7 +21,7 @@ pthread_mutex_t cacheMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 3;
+const int threadCount = 5;
 queue<int> clients;
 vector<int> editClients;
 
@@ -85,8 +85,10 @@ class LRUCache {
         void write(const string& key, const string& value) {
             if (cache.find(key) != cache.end()) {
                 // If key exists, update the value and move it to the front
+                pthread_mutex_lock(&cacheMutex);
                 cache[key].first = value;
                 lruList.splice(lruList.begin(), lruList, cache[key].second);
+                pthread_mutex_unlock(&cacheMutex);
                 writeFile(key, value);
                 return;
             }
@@ -100,7 +102,9 @@ class LRUCache {
 
             // Add the new key-value pair to the cache
             lruList.push_front(key);
+            pthread_mutex_lock(&cacheMutex);
             cache[key] = {value, lruList.begin()};
+            pthread_mutex_unlock(&cacheMutex);
             writeFile(key, value);
         }
 
@@ -180,7 +184,7 @@ string listTextFiles(const string& directoryPath) {
         }
     }
 
-    cout<<"list files = "<<fileList<<endl;;
+    // cout<<fileList<<endl;;
     // Close directory
     closedir(dir);
 
@@ -190,14 +194,13 @@ string listTextFiles(const string& directoryPath) {
 
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
-    cout<<"isnide handleclient ="<<clientSocket<<endl;
     char buffer[1024];
     ssize_t bytesReceived;
     // cout<<arg<<" "<<bytesReceived<<endl;;
     while(1){
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived == -1) {
-             cout<<"nere";
+            perror("recv");
             close(clientSocket);
             return NULL;
         }
@@ -224,14 +227,14 @@ void* HandleClient(void* arg) {
         while (i < len) {
             cout<<msg[i]<<endl;
             if(msg[i]=="GET_FILES"){
-                string response=listTextFiles("./text_files/");
+                string response=listTextFiles("./server/text_files/");
                 // i++;
                 send(clientSocket,response.c_str(),response.size(),0);
             }
             else if(msg[i]=="GET_FILE"){
                 // cout<<"in get file\n";
                 sleep(0.1);
-                string filename="./text_files/";
+                string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string exact_file = (i+1)<len?(msg[++i]):"NULL";
                 string final;
@@ -243,7 +246,7 @@ void* HandleClient(void* arg) {
             }
 
             else if(msg[i]=="UPDATE_FILE"){
-                string filename="./text_files/";
+                string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string content="";
 
@@ -255,16 +258,82 @@ void* HandleClient(void* arg) {
                 // cache will call file writing function on its own
                 
             }
-            if (msg[i] == "END") break;
-
+            if (msg[i] == "CLOSE_CLIENT"){
+                close(clientSocket);
+                return NULL;
+            }
             i++;
         }
-        string result = "\n";
-        send(clientSocket, result.c_str(), result.size(), 0);
+        if(len==0)
+       {
+        
+            break;
+        }
     }
     close(clientSocket);
+    return NULL;
 }
 
+void* HandleQueue(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&qMutex);
+        if (clients.empty()) {
+            pthread_cond_wait(&cv, &qMutex);
+        }
+        // Pop client socket from the queue
+        int clientSocket = clients.front();
+        clients.pop();
+        pthread_mutex_unlock(&qMutex);
+        // Process client
+        HandleClient(&clientSocket);
+    }
+}
+
+// void print(queue<int> clients){
+//     while(!clients.empty()){
+//         cout<<clients.front()<<" ";
+//         clients.pop();
+//     }
+//     cout<<endl;
+// }
+
+
+void* HandleQueue(void* arg) {
+    pthread_t threadId = pthread_self();
+    cout<<"in thread = "<<threadId<<endl;
+    while (1) {
+        //cout<<"in this thread loop = "<<threadId<<endl;
+        pthread_mutex_lock(&qMutex);
+        while (clients.empty()) {
+            pthread_cond_wait(&cv, &qMutex);
+        }
+        // Pop client socket from the queue
+        int clientSocket = clients.front();
+        //cout<<"client socker = "<<clientSocket<<" handled by "<<threadId<<endl;
+        clients.pop();
+        //print(clients);
+        pthread_mutex_unlock(&qMutex);
+        // Process client
+        if(clientSocket!=-1)
+            HandleClient(&clientSocket);
+        cout<<"after handle client\n";
+    }
+}
+
+
+
+void* AcceptConnections(void* arg) {
+    int serverSocket = *((int*)arg);
+    while (1) {
+        int clientSocket = AcceptConnection(serverSocket);
+        pthread_mutex_lock(&qMutex);
+        clients.push(clientSocket);
+        // print(clients);
+        pthread_cond_signal(&cv);
+        cout<<"after signal\n";
+        pthread_mutex_unlock(&qMutex);
+    }   
+}
 
 int main(int argc, char** argv) {
     int portno;
@@ -275,21 +344,26 @@ int main(int argc, char** argv) {
     }
 
     portno = atoi(argv[1]);
-    // cout << "Server port: " << portno << endl;
+
+    pthread_t threadPool[threadCount];
+
+    for (int i = 0; i < threadCount; i++) {
+        cout<<"thread no "<<i<<endl;
+        pthread_create(&threadPool[i], NULL, HandleQueue, NULL);
+    }
 
     int serverSocket = CreateSocket(portno);
 
-    while (1) {
-        int clientSocket = AcceptConnection(serverSocket);
-        if (clientSocket != -1) {
-            cout<<"accepted client ="<<clientSocket<<endl;
-            HandleClient((void*)&clientSocket);
-        //    pthread_t serial;
-        //    pthread_create(&serial, NULL, HandleClient, (void*)&clientSocket);
-        //    pthread_join(serial, NULL); // Wait for the thread to finish before accepting the next connection
-        }
+    pthread_t acceptThread;
+    pthread_create(&acceptThread, NULL, AcceptConnections, (void*)&serverSocket);
+
+    for (int i = 0; i < threadCount; i++) {
+        pthread_join(threadPool[i], NULL);
     }
 
-    close(serverSocket); // Close server socket
+    pthread_join(acceptThread, NULL);
+
+    close(serverSocket);
+
     return 0;
 }
