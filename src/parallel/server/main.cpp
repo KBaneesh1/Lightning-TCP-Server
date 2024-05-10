@@ -3,8 +3,8 @@
 #include <string>
 #include <cstring>
 #include <pthread.h>
-// #include <sys/socket.h>
-// #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <iostream>
 #include <queue>
 #include <unordered_map>
@@ -82,7 +82,7 @@ class LRUCache {
             return cache[key].first;
         }
 
-        string write(const string& key, const string& value) {
+        void write(const string& key, const string& value) {
             if (cache.find(key) != cache.end()) {
                 // If key exists, update the value and move it to the front
                 pthread_mutex_lock(&cacheMutex);

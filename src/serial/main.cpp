@@ -10,11 +10,58 @@
 #include <unordered_map>
 #include <unistd.h>
 #include <fstream>
-#include<dirent.h>
+#include <dirent.h>
 #include <sstream> 
-#include<list>
+#include <list>
 
+
+//FINAL
 using namespace std;
+pthread_mutex_t cacheMutex;
+pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+
+const int threadCount = 3;
+queue<int> clients;
+vector<int> editClients;
+
+string readFile(string filename){    
+    ifstream file(filename);
+    // cout<<"filename in getfile "<<filename<<endl;
+    if(!file.is_open()){
+        cerr<<"error opening in get file"<<endl;
+    }
+    string fileContents;
+    string line;
+    //while(getline(file,line)){
+    //    fileContents += line;
+    //}
+    stringstream buffer;
+    buffer << file.rdbuf();
+    fileContents = buffer.str();
+    file.close();
+    string final;
+    final = "RESPONSE\n"+fileContents+"\nEND";
+    return final;
+}
+
+
+void writeFile(string filename, string content) {
+    FILE *file = fopen(filename.c_str(),"w");
+    if (!file) {
+        cout<<"error updating file\n";
+        //send(clientSocket, "ERROR", 5, 0);
+    } else {
+        cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"<<endl;
+        cout<<"writing content "<< content<<endl;
+        if(content!="" and content!="\n")
+        {
+            fwrite(content.c_str(),sizeof(char),content.size(),file);
+        }
+        fclose(file);
+    }
+}
+
 
 class LRUCache {
     private:
@@ -35,13 +82,11 @@ class LRUCache {
             return cache[key].first;
         }
 
-        string write(const string& key, const string& value) {
+        void write(const string& key, const string& value) {
             if (cache.find(key) != cache.end()) {
                 // If key exists, update the value and move it to the front
-                pthread_mutex_lock(&cacheMutex);
                 cache[key].first = value;
                 lruList.splice(lruList.begin(), lruList, cache[key].second);
-                pthread_mutex_unlock(&cacheMutex);
                 writeFile(key, value);
                 return;
             }
@@ -55,9 +100,7 @@ class LRUCache {
 
             // Add the new key-value pair to the cache
             lruList.push_front(key);
-            pthread_mutex_lock(&cacheMutex);
             cache[key] = {value, lruList.begin()};
-            pthread_mutex_unlock(&cacheMutex);
             writeFile(key, value);
         }
 
@@ -70,12 +113,17 @@ class LRUCache {
             cout << endl;
     }
 };
+
 LRUCache db_cache(3);
+
 
 int CreateSocket(int portno) {
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    int iSetOption = 1;
+    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption,sizeof(iSetOption));
+
     if (sfd == -1) {
-        perror("socket");
+        // perror("socket");
         return -1;
     }
 
@@ -86,13 +134,13 @@ int CreateSocket(int portno) {
     serverAddress.sin_port = htons(portno);
 
     if (bind(sfd, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
-        perror("bind");
+        // perror("bind");
         close(sfd);
         return -1;
     }
 
     if (listen(sfd, 5) == -1) {
-        perror("listen");
+        // perror("listen");
         close(sfd);
         return -1;
     }
@@ -105,7 +153,7 @@ int AcceptConnection(int serverSocket) {
     socklen_t clientAddressLen = sizeof(clientAddress);
     int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientAddressLen);
     if (clientSocket == -1) {
-        perror("accept");
+        // perror("accept");
         return -1;
     }
     return clientSocket;
@@ -139,42 +187,6 @@ string listTextFiles(const string& directoryPath) {
     return fileList;
 }
 
-string readFile(string filename){    
-    ifstream file(filename);
-    // cout<<"filename in getfile "<<filename<<endl;
-    if(!file.is_open()){
-        cerr<<"error opening in get file"<<endl;
-    }
-    string fileContents;
-    string line;
-    //while(getline(file,line)){
-    //    fileContents += line;
-    //}
-    stringstream buffer;
-    buffer << file.rdbuf();
-    fileContents = buffer.str();
-    file.close();
-    string final;
-    final = "RESPONSE\n"+fileContents+"\nEND";
-    return final;
-}
-
-
-void writeFile(string filename, string content) {
-    FILE *file = fopen(filename.c_str(),"w");
-    if (!file) {
-        cout<<"error updating file\n";
-        //send(clientSocket, "ERROR", 5, 0);
-    } else {
-        cout<<"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"<<endl;
-        cout<<"writing vontent "<< content<<endl;
-        if(content!="" and content!="\n")
-        {
-            fwrite(content.c_str(),sizeof(char),content.size(),file);
-        }
-        fclose(file);
-    }
-}
 
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
@@ -251,6 +263,7 @@ void* HandleClient(void* arg) {
     }
     close(clientSocket);
 }
+
 
 int main(int argc, char** argv) {
     int portno;
