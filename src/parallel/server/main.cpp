@@ -18,6 +18,7 @@
 //FINAL
 using namespace std;
 pthread_mutex_t cacheMutex;
+pthread_mutex_t writeMutex;
 pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
@@ -25,7 +26,9 @@ const int threadCount = 5;
 queue<int> clients;
 vector<int> editClients;
 
-string readFile(string filename){    
+string readFile(string filename){  
+    filename="./server/text_files/" + filename;
+    cout<<"Filename is "<<filename<<endl;
     ifstream file(filename);
     // cout<<"filename in getfile "<<filename<<endl;
     if(!file.is_open()){
@@ -56,7 +59,9 @@ void writeFile(string filename, string content) {
         cout<<"writing content "<< content<<endl;
         if(content!="" and content!="\n")
         {
+            pthread_mutex_lock(&writeMutex);
             fwrite(content.c_str(),sizeof(char),content.size(),file);
+            pthread_mutex_unlock(&writeMutex);
         }
         fclose(file);
     }
@@ -75,12 +80,26 @@ class LRUCache {
         string read(string key) {
             // key here is filename
             if (cache.find(key) == cache.end()) {
-                return "NULL"; // Not found
-            }
+                // return "NULL"; // Not found
             // Move accessed key to the front of the list (most recently used)
+            // If cache is full, remove the least recently used item
+                string value = readFile(key);
+                if (cache.size() >= capacity) {
+                    string lruKey = lruList.back();
+                    lruList.pop_back();
+                    cache.erase(lruKey);
+                }
+
+                // Add the new key-value pair to the cache
+                lruList.push_front(key);
+                pthread_mutex_lock(&cacheMutex);
+                cache[key] = {value, lruList.begin()};
+                pthread_mutex_unlock(&cacheMutex);
+            }
             lruList.splice(lruList.begin(), lruList, cache[key].second);
             return cache[key].first;
         }
+
 
         void write(const string& key, const string& value) {
             if (cache.find(key) != cache.end()) {
@@ -235,13 +254,14 @@ void* HandleClient(void* arg) {
                 // cout<<"in get file\n";
                 sleep(0.1);
                 string filename="./server/text_files/";
-                filename =(i+1)<len?(filename+msg[++i]):"NULL";
+                // filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string exact_file = (i+1)<len?(msg[++i]):"NULL";
                 string final;
                 final = db_cache.read(exact_file);
-                if(final == "NULL") {
-                    final = readFile(filename);
-                }
+                //if(final == "NULL") {
+                //    final = readFile(filename);
+                //}
+                db_cache.display();
                 send(clientSocket, final.c_str(), final.size(), 0);
             }
 
@@ -274,20 +294,6 @@ void* HandleClient(void* arg) {
     return NULL;
 }
 
-void* HandleQueue(void* arg) {
-    while (1) {
-        pthread_mutex_lock(&qMutex);
-        if (clients.empty()) {
-            pthread_cond_wait(&cv, &qMutex);
-        }
-        // Pop client socket from the queue
-        int clientSocket = clients.front();
-        clients.pop();
-        pthread_mutex_unlock(&qMutex);
-        // Process client
-        HandleClient(&clientSocket);
-    }
-}
 
 // void print(queue<int> clients){
 //     while(!clients.empty()){

@@ -17,15 +17,15 @@
 
 //FINAL
 using namespace std;
-pthread_mutex_t cacheMutex;
-pthread_mutex_t qMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-const int threadCount = 3;
+const int threadCount = 5;
 queue<int> clients;
 vector<int> editClients;
 
-string readFile(string filename){    
+string readFile(string filename){  
+    filename="./server/text_files/" + filename;
+    cout<<"Filename is "<<filename<<endl;
     ifstream file(filename);
     // cout<<"filename in getfile "<<filename<<endl;
     if(!file.is_open()){
@@ -75,12 +75,24 @@ class LRUCache {
         string read(string key) {
             // key here is filename
             if (cache.find(key) == cache.end()) {
-                return "NULL"; // Not found
-            }
+                // return "NULL"; // Not found
             // Move accessed key to the front of the list (most recently used)
+            // If cache is full, remove the least recently used item
+                string value = readFile(key);
+                if (cache.size() >= capacity) {
+                    string lruKey = lruList.back();
+                    lruList.pop_back();
+                    cache.erase(lruKey);
+                }
+
+                // Add the new key-value pair to the cache
+                lruList.push_front(key);
+                cache[key] = {value, lruList.begin()};
+            }
             lruList.splice(lruList.begin(), lruList, cache[key].second);
             return cache[key].first;
         }
+
 
         void write(const string& key, const string& value) {
             if (cache.find(key) != cache.end()) {
@@ -180,7 +192,7 @@ string listTextFiles(const string& directoryPath) {
         }
     }
 
-    cout<<"list files = "<<fileList<<endl;;
+    // cout<<fileList<<endl;;
     // Close directory
     closedir(dir);
 
@@ -190,14 +202,13 @@ string listTextFiles(const string& directoryPath) {
 
 void* HandleClient(void* arg) {
     int clientSocket = *((int*)arg);
-    cout<<"isnide handleclient ="<<clientSocket<<endl;
     char buffer[1024];
     ssize_t bytesReceived;
     // cout<<arg<<" "<<bytesReceived<<endl;;
     while(1){
         bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (bytesReceived == -1) {
-             cout<<"nere";
+            perror("recv");
             close(clientSocket);
             return NULL;
         }
@@ -224,26 +235,27 @@ void* HandleClient(void* arg) {
         while (i < len) {
             cout<<msg[i]<<endl;
             if(msg[i]=="GET_FILES"){
-                string response=listTextFiles("./text_files/");
+                string response=listTextFiles("./server/text_files/");
                 // i++;
                 send(clientSocket,response.c_str(),response.size(),0);
             }
             else if(msg[i]=="GET_FILE"){
                 // cout<<"in get file\n";
                 sleep(0.1);
-                string filename="./text_files/";
-                filename =(i+1)<len?(filename+msg[++i]):"NULL";
+                string filename="./server/text_files/";
+                // filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string exact_file = (i+1)<len?(msg[++i]):"NULL";
                 string final;
                 final = db_cache.read(exact_file);
-                if(final == "NULL") {
-                    final = readFile(filename);
-                }
+                //if(final == "NULL") {
+                //    final = readFile(filename);
+                //}
+                db_cache.display();
                 send(clientSocket, final.c_str(), final.size(), 0);
             }
 
             else if(msg[i]=="UPDATE_FILE"){
-                string filename="./text_files/";
+                string filename="./server/text_files/";
                 filename =(i+1)<len?(filename+msg[++i]):"NULL";
                 string content="";
 
@@ -255,15 +267,22 @@ void* HandleClient(void* arg) {
                 // cache will call file writing function on its own
                 
             }
-            if (msg[i] == "END") break;
-
+            if (msg[i] == "CLOSE_CLIENT"){
+                close(clientSocket);
+                return NULL;
+            }
             i++;
         }
-        string result = "\n";
-        send(clientSocket, result.c_str(), result.size(), 0);
+        if(len==0)
+       {
+        
+            break;
+        }
     }
     close(clientSocket);
+    return NULL;
 }
+
 
 
 int main(int argc, char** argv) {
